@@ -15,12 +15,12 @@ L["Feedback & Update Link"] = "https://www.curseforge.com/wow/addons/maillogger"
 
 local locale = GetLocale()
 
-if locale == "enUs" then
+if locale == "enUS" then
 	--Tips
 	L["MAILLOGGER TIPS"] = "|cFFBA55D3MailLogger|r Tips:Use |cFF00BFFF/maillogger|r |cFFFF4500gui|r or |cFF00BFFF/ml|r |cFFFF4500gui|r open Option Interface, Use |cFF00BFFF/maillogger|r |cFFFF9000all|r or |cFF00BFFF/ml|r |cFFFF9000all|r open All Logs, |cFF00BFFF/maillogger|r |cFFFF9000tl|r or |cFF00BFFF/ml|r |cFFFF9000tl|r open Trade Logs, |cFF00BFFF/maillogger|r |cFFFF9000ml|r or |cFF00BFFF/ml|r |cFFFF9000ml|r open Mail Logs, Use |cFF00BFFF/maillogger|r |cFFFF9000all|r or |cFF00BFFF/ml|r |cFFFF9000sm|r open Sent Mail Logs, Use |cFF00BFFF/maillogger|r |cFFFF9000all|r or |cFF00BFFF/ml|r |cFFFF9000rm|r open Received Mail Logs."
 	--Trades
-	L["MAILLOGGER_TEXT_TRADE_ERROR"] = "Trade with %s was failed, caused by %s."
-	L["MAILLOGGER_TEXT_TRADE_SUCCEED"] = "Trade with %s was succeed."
+	L["MAILLOGGER_TEXT_TRADE_ERROR"] = "Trade with %s failed, caused by %s."
+	L["MAILLOGGER_TEXT_TRADE_SUCCEED"] = "Trade with %s succeed."
 	L["MAILLOGGER_TEXT_TRADE_ITEMS_RECEIVE"] = " Received #num# item(s), included #item# (#quantity#)."
 	L["MAILLOGGER_TEXT_TRADE_ITEMS_GIVE"] = " Gave #num# item(s), included #item# (#quantity#)."
 	L["MAILLOGGER_TEXT_TRADE_MONEY_RECEIVE"] = " Received %s."
@@ -49,7 +49,7 @@ elseif locale == "zhCN" then
 	L["|cFFFF33CCFeedback & Update: |r"] = "|cFFFF33CC反馈与更新：|r"
 	L["Enable |cFFBA55D3MailLogger|r"] = "启用|cFFBA55D3MailLogger|r"
 	L["Trade Function"] = "交易管理"
-	L["Enable |cFF00CD00TradeLog|r"] = "启用|cFF00CD00交易通报|r"
+	L["Enable |cFF00CD00Whisper|r"] = "启用|cFF00CD00交易密语|r"
 	L["Send to |cFFF0F000Group|r"] = "发送到|cFFF0F000团队|r"
 	L["Show |cFF4169E1Minimap Button|r"] = "显示|cFF4169E1小地图按钮|r"
 	L["Log |cFFFF7F50Every Day|r"] = "记录|cFFFF7F50每一天|r"
@@ -82,7 +82,7 @@ elseif locale == "zhCN" then
 	L["Trades"] = "交易"
 	L["Mails"] = "邮件"
 	L["Sent"] = "发件"
-	L["Recevied"] = "收件"
+	L["Received"] = "收件"
 	L["|cFF00FF00Left Click|r to Open Log Frame"] = "|cFF00FF00左键|r打开记录窗口"
 	L["|cFF00FF00Right Click|r to Open Config Frame"] = "|cFF00FF00右键|r打开设置窗口"
 	L["|cFF00FF00Shift+Left|r to Restore Log Frame Position"] = "|cFF00FF00Shift+左键|r重置记录窗口位置"
@@ -125,7 +125,7 @@ elseif locale == "zhTW" then --Taiwan is a part of China forever
     L["|cFFFF33CCFeedback & Update: |r"] = "|cFFFF33CC回饋與更新：|r"
     L["Enable |cFFBA55D3MailLogger|r"] = "啟用|cFFBA55D3MailLogger|r"
     L["Trade Function"] = "交易管理"
-    L["Enable |cFF00CD00TradeLog|r"] = "啟用|cFF00CD00交易通報|r"
+    L["Enable |cFF00CD00Whisper|r"] = "啟用|cFF00CD00交易密語|r"
     L["Send to |cFFF0F000Group|r"] = "發送到|cFFF0F000團隊|r"
 	L["Show |cFF4169E1Minimap Button|r"] = "顯示|cFF4169E1迷你地圖按鈕|r"
 	L["Log |cFFFF7F50Every Day|r"] = "記錄|cFFFF7F50每一天|r"
@@ -158,7 +158,7 @@ elseif locale == "zhTW" then --Taiwan is a part of China forever
 	L["Trades"] = "交易"
 	L["Mails"] = "郵件"
 	L["Sent"] = "發件"
-	L["Recevied"] = "收件"
+	L["Received"] = "收件"
     L["|cFF00FF00Left Click|r to Open Log Frame"] = "|cFF00FF00左鍵|r打開記錄視窗"
     L["|cFF00FF00Right Click|r to Open Config Frame"] = "|cFF00FF00右鍵|r打開設置視窗"
     L["|cFF00FF00Shift+Left|r to Restore Log Frame Position"] = "|cFF00FF00Shift+左鍵|r重置記錄視窗位置"

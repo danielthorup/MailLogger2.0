@@ -205,7 +205,7 @@ function Panel:Initialize()
 	--标题
 	local TradeModeTitle = self:CreateHeading(L["Trade Function"])
 	--交易记录开关
-	local TradeLogSwitch = self:CreateCheckBox(L["Enable |cFF00CD00TradeLog|r"],
+	local TradeLogSwitch = self:CreateCheckBox(L["Enable |cFF00CD00Whisper|r"],
 		function(self) return Config.LogTrades end,
 		function(self, v) Config.LogTrades = v end,
 		true)
@@ -412,10 +412,12 @@ function Panel:Initialize()
 	TradeLogDays:SetPoint("TOPLEFT", TradeModeTitle, "BOTTOMLEFT", TradeLogDayHeading:GetStringWidth() + 60, -125)
 	PrintTradeLog:SetPoint("TOPLEFT", TradeModeTitle, "BOTTOMLEFT", 350, -75)
 	DeleteAllLog:SetPoint("TOPLEFT", TradeModeTitle, "BOTTOMLEFT", 350, -125)
-	PreventRobotTradeTitle:SetPoint("TOPLEFT", PanelTitle, "BOTTOMLEFT", 0, -260)
-	PreventRobotTradeSwitch:SetPoint("TOPLEFT", PreventRobotTradeTitle, "BOTTOMLEFT", 30, -15)
-	MaintanceHeading:SetPoint("LEFT", PreventRobotTradeTitle, "LEFT", 320, 0)
-	MaintnceButton:SetPoint("LEFT", PreventRobotTradeSwitch, "LEFT", 320, 0)
+--	PreventRobotTradeTitle:SetPoint("TOPLEFT", PanelTitle, "BOTTOMLEFT", 0, -260)
+--	PreventRobotTradeSwitch:SetPoint("TOPLEFT", PreventRobotTradeTitle, "BOTTOMLEFT", 30, -15)
+--	MaintanceHeading:SetPoint("LEFT", PreventRobotTradeTitle, "LEFT", 320, 0)
+--	MaintnceButton:SetPoint("LEFT", PreventRobotTradeSwitch, "LEFT", 320, 0)
+	MaintanceHeading:SetPoint("TOPLEFT", PanelTitle, "BOTTOMLEFT", 0, -260)
+	MaintnceButton:SetPoint("TOPLEFT", MaintanceHeading, "BOTTOMLEFT", 30, -15)
 	--忽略列表
 	IgnoreItemsTitle:SetPoint("TOPLEFT", PanelTitle, "BOTTOMLEFT", 0, -360)
 	DisplaySpellButton:SetPoint("LEFT", IgnoreItemsTitle, "LEFT", 290, 0)

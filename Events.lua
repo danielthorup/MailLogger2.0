@@ -45,8 +45,10 @@ local time = time
 local hooksecurefunc = hooksecurefunc
 local t_insert = table.insert
 local t_remove = table.remove
---邮件缓存
-local TempMail = nil
+--缓存
+local Current = nil
+--邮箱界面状态
+local MailBoxOpened = false
 
 --公共方法：
 --读取/保存MailLoggerDB
@@ -107,6 +109,7 @@ function Addon:NewTrade()
 		["Time"] = date("%H:%M:%S"),
 		["PlayerName"] = (UnitName("player")),
 		["TargetName"] = (UnitName("npc")),
+		["ServerName"] = select(2, UnitName("npc")),
 		["Location"] = GetRealZoneText(),
 		["ReceiveItems"] = {},
 		["GiveItems"] = {},
@@ -124,6 +127,7 @@ function Addon:NewMail()
 		["Time"] = nil,
 		["PlayerName"] = (UnitName("player")),
 		["TargetName"] = nil,
+		["ServerName"] = nil,
 		["Location"] = nil,
 		["ReceiveItems"] = {},
 		["GiveItems"] = {},
@@ -174,11 +178,11 @@ function Addon:GetColorMoneyString(Money)
 end
 --更新交易物品信息
 function Addon:UpdateTradeItemInfo(Side, Slot, ItemTable)
-	local ItemName, Texture, Quantity, Quality, IsUsable, Enchantment, ItemLink
+	local ItemName, Quantity, Enchantment, ItemLink
 	if Side == "target" then
-		ItemName, Texture, Quantity, Quality, IsUsable, Enchantment = GetTradeTargetItemInfo(Slot)
+		ItemName, _, Quantity, _, _, Enchantment = GetTradeTargetItemInfo(Slot)
 	else
-		ItemName, Texture, Quantity, Quality, Enchantment = GetTradePlayerItemInfo(Slot)
+		ItemName, _, Quantity, _, Enchantment = GetTradePlayerItemInfo(Slot)
 	end
 	if not ItemName or IgnoreItems[ItemName] then
 		ItemTable[Slot] = nil
@@ -197,24 +201,30 @@ function Addon:UpdateTradeItemInfo(Side, Slot, ItemTable)
 	}
 end
 --更新交易金钱
-function Addon:UpdateTradeMoney()
-	TradeLog[#TradeLog].ReceiveMoney = GetTargetTradeMoney()
-	TradeLog[#TradeLog].GiveMoney = GetPlayerTradeMoney()
+function Addon:UpdateTradeMoney(CurrentTrade)
+	CurrentTrade.ReceiveMoney = GetTargetTradeMoney()
+	CurrentTrade.GiveMoney = GetPlayerTradeMoney()
 end
 --交易通报
 function Addon:AnnounceTrade()
 	if not Config.LogTrades then
 		return
 	end
-	if (TradeLog[#TradeLog].Result == "error" or TradeLog[#TradeLog].Result == "cancelled") and TradeLog[#TradeLog].TargetName and TradeLog[#TradeLog].Reason then
-		local msg = string.format(L["MAILLOGGER_TEXT_TRADE_ERROR"], TradeLog[#TradeLog].TargetName, TradeLog[#TradeLog].Reason)
-		SendChatMessage(msg, "whisper", nil, TradeLog[#TradeLog].TargetName)
-	elseif TradeLog[#TradeLog].Result == "completed" then
-		local ReceiveItemNum = TradeLog[#TradeLog].ReceiveItems[7] and Addon:GetTableSize(TradeLog[#TradeLog].ReceiveItems) - 1 or Addon:GetTableSize(TradeLog[#TradeLog].ReceiveItems)
-		local GiveItemNum = TradeLog[#TradeLog].GiveItems[7] and Addon:GetTableSize(TradeLog[#TradeLog].GiveItems) - 1 or Addon:GetTableSize(TradeLog[#TradeLog].GiveItems)
-		local ReceiveMoneyString = Addon:GetMoneyString(TradeLog[#TradeLog].ReceiveMoney)
-		local GiveMoneyString = Addon:GetMoneyString(TradeLog[#TradeLog].GiveMoney)
-		local msg = string.format(L["MAILLOGGER_TEXT_TRADE_SUCCEED"], TradeLog[#TradeLog].TargetName)
+	if (Current.Result == "error" or Current.Result == "cancelled") and Current.TargetName and Current.Reason then
+		local msg = string.format(L["MAILLOGGER_TEXT_TRADE_ERROR"], Current.TargetName, Current.Reason)
+		do -- 适配跨服情况
+			local WhisperTarget = Current.TargetName
+			if Current.ServerName then
+				WhisperTarget = WhisperTarget .. "-" .. Current.ServerName
+			end
+			SendChatMessage(msg, "whisper", nil, WhisperTarget)
+		end
+	elseif Current.Result == "completed" then
+		local ReceiveItemNum = Current.ReceiveItems[7] and Addon:GetTableSize(Current.ReceiveItems) - 1 or Addon:GetTableSize(Current.ReceiveItems)
+		local GiveItemNum = Current.GiveItems[7] and Addon:GetTableSize(Current.GiveItems) - 1 or Addon:GetTableSize(Current.GiveItems)
+		local ReceiveMoneyString = Addon:GetMoneyString(Current.ReceiveMoney)
+		local GiveMoneyString = Addon:GetMoneyString(Current.GiveMoney)
+		local msg = string.format(L["MAILLOGGER_TEXT_TRADE_SUCCEED"], Current.TargetName)
 		if ReceiveMoneyString ~= "" then
 			msg = msg .. string.format(L["MAILLOGGER_TEXT_TRADE_MONEY_RECEIVE"], ReceiveMoneyString)
 		end
@@ -224,8 +234,8 @@ function Addon:AnnounceTrade()
 		if ReceiveItemNum > 0 then
 			msg = msg .. Addon:FormatMessage(L["MAILLOGGER_TEXT_TRADE_ITEMS_RECEIVE"],
 				{
-					["#item#"] = TradeLog[#TradeLog].ReceiveItems[(next(TradeLog[#TradeLog].ReceiveItems))].ItemLink,
-					["#quantity#"] = TradeLog[#TradeLog].ReceiveItems[(next(TradeLog[#TradeLog].ReceiveItems))].Number,
+					["#item#"] = Current.ReceiveItems[(next(Current.ReceiveItems))].ItemLink,
+					["#quantity#"] = Current.ReceiveItems[(next(Current.ReceiveItems))].Number,
 					["#num#"] = ReceiveItemNum,
 				}
 			)
@@ -233,20 +243,27 @@ function Addon:AnnounceTrade()
 		if GiveItemNum > 0 then
 			msg = msg ..  Addon:FormatMessage(L["MAILLOGGER_TEXT_TRADE_ITEMS_GIVE"],
 				{
-					["#item#"] = TradeLog[#TradeLog].GiveItems[(next(TradeLog[#TradeLog].GiveItems))].ItemLink,
-					["#quantity#"] = TradeLog[#TradeLog].GiveItems[(next(TradeLog[#TradeLog].GiveItems))].Number,
+					["#item#"] = Current.GiveItems[(next(Current.GiveItems))].ItemLink,
+					["#quantity#"] = Current.GiveItems[(next(Current.GiveItems))].Number,
 					["#num#"] = GiveItemNum,
 				}
 			)
 		end
-		if TradeLog[#TradeLog].GiveItems[7] then
-			msg = msg .. string.format(L["MAILLOGGER_TEXT_TRADE_ENCHANTMENT"], TradeLog[#TradeLog].GiveItems[7].ItemLink, TradeLog[#TradeLog].GiveItems[7].Enchantment)
+		if Current.GiveItems[7] then
+			msg = msg .. string.format(L["MAILLOGGER_TEXT_TRADE_ENCHANTMENT"], Current.GiveItems[7].ItemLink, Current.GiveItems[7].Enchantment)
 		end
-		if TradeLog[#TradeLog].ReceiveItems[7] then
-			msg = msg .. string.format(L["MAILLOGGER_TEXT_TRADE_ENCHANTMENT"], TradeLog[#TradeLog].ReceiveItems[7].ItemLink, TradeLog[#TradeLog].ReceiveItems[7].Enchantment)
+		if Current.ReceiveItems[7] then
+			msg = msg .. string.format(L["MAILLOGGER_TEXT_TRADE_ENCHANTMENT"], Current.ReceiveItems[7].ItemLink, Current.ReceiveItems[7].Enchantment)
 		end
 
-		SendChatMessage(msg, "whisper", nil, TradeLog[#TradeLog].TargetName)
+		do -- 适配跨服情况
+			local WhisperTarget = Current.TargetName
+			if Current.ServerName then
+				WhisperTarget = WhisperTarget .. "-" .. Current.ServerName
+			end
+			SendChatMessage(msg, "whisper", nil, WhisperTarget)
+		end
+
 		if Config.SendToGroup then
 			if IsInRaid() then
 				SendChatMessage(msg, "raid")
@@ -275,7 +292,7 @@ function Addon:PrintTradeLog(ListMode, AltName, SelectDate)
 	-- 清理不合法TradeLog
 	if #TradeLog > 0 then
 		for i = #TradeLog, 1, -1 do
-			if not TradeLog[i].Date or not TradeLog[i].Time or not TradeLog[i].TargetName or not TradeLog[i].Result or TradeLog[i].GiveMoney == 0 and TradeLog[i].ReceiveMoney == 0 and #TradeLog[i].GiveItems == 0 and #TradeLog[i].ReceiveItems == 0 then
+			if not TradeLog[i].Date or not TradeLog[i].Time or not TradeLog[i].TargetName or not TradeLog[i].Result or TradeLog[i].GiveMoney == 0 and TradeLog[i].ReceiveMoney == 0 and (next(TradeLog[i].GiveItems)) and (next(TradeLog[i].ReceiveItems)) then
 				t_remove(TradeLog, i)
 			end
 		end
@@ -356,7 +373,6 @@ function Addon:PrintTradeLog(ListMode, AltName, SelectDate)
 			end
 		end
 	end
-	msg = string.sub(msg, 1, #msg - 1)
 	Output.export:SetText(msg)
 	Output.export:Disable()
 end
@@ -365,6 +381,7 @@ end
 --装载和退出
 Frame:RegisterEvent("ADDON_LOADED")
 Frame:RegisterEvent("PLAYER_LOGOUT")
+Frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 --交易相关
 Frame:RegisterEvent("MAIL_SHOW")
 Frame:RegisterEvent("MAIL_CLOSED")
@@ -444,21 +461,31 @@ function Frame:ADDON_LOADED(Name)
 	end
 	-- 初始化Output和MinimapIcon和Calendar
 	Addon.Output:Initialize()
-	Addon.MinimapIcon:Initialize()
 	Addon.Calendar:Initialize()
 
-	if Config.ShowMinimapIcon then -- 小地图
-		Addon:UpdatePosition(Config.MinimapIconAngle)
-		MinimapIcon.Minimap:Show()
-	else
-		MinimapIcon.Minimap:Hide()
-	end
 	print(string.format(L["|cFFBA55D3MailLogger|r v%s|cFFB0C4DE is Loaded.|r"], Addon.Version))
 end
+
+-- 进入世界
+function Frame:PLAYER_ENTERING_WORLD()
+	if Addon.LDB and Addon.LDBIcon and ((IsAddOnLoaded("TitanClassic")) or (IsAddOnLoaded("Titan"))) then
+		MinimapIcon:InitBroker()
+	else
+		MinimapIcon:Initialize()
+		if Config.ShowMinimapIcon then -- 小地图
+			Addon:UpdatePosition(Config.MinimapIconAngle)
+			MinimapIcon.Minimap:Show()
+		else
+			MinimapIcon.Minimap:Hide()
+		end
+	end
+	self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+end
+
 -- 退出游戏
 function Frame:PLAYER_LOGOUT()
 	-- 清理临时变量
-	TempMail = nil
+	Current = nil
 	-- 存儲輸出窗口位置
 	Config.OutputFramePos[1], _, Config.OutputFramePos[3], Config.OutputFramePos[4], Config.OutputFramePos[5] = Output.background:GetPoint()
 	-- 将数据存入MailLoggerDB（保存文件）
@@ -474,8 +501,15 @@ end
 
 -- 交易相关（记录、拒绝恶意交易）
 function Frame:TRADE_SHOW()
+	do -- 战场和竞技场不记录
+		local InstanceType = select(2, IsInInstance())
+		if InstanceType == "pvp" or InstanceType == "arena" then
+			return
+		end
+	end
 	-- 阻止小号交易相关功能
 	-- 屏蔽外会和团队之外的人交易
+	--[[
 	if Config.PreventTrade then
 		local RequestName, RequestGUID = (UnitName("npc")), UnitGUID("npc")
 		local TargetCanTradeMe = false
@@ -514,39 +548,39 @@ function Frame:TRADE_SHOW()
 		if not TargetCanTradeMe then
 			CloseTrade()
 		end
-	end
+	end]]
 	-- 开始记录合法交易
 	if Config.LogDays == 0 then
 		return
 	end
-	local TempTrade = Addon:NewTrade()
-	t_insert(TradeLog, TempTrade)
+	Current = Addon:NewTrade()
+	t_insert(TradeLog, Addon:NewTrade())
 end
 -- 交易物品信息更新
 function Frame:TRADE_PLAYER_ITEM_CHANGED(Slot)
-	if TradeLog[#TradeLog] then
-		Addon:UpdateTradeItemInfo("player", Slot, TradeLog[#TradeLog].GiveItems)
+	if Current then
+		Addon:UpdateTradeItemInfo("player", Slot, Current.GiveItems)
 	end
 end
 function Frame:TRADE_TARGET_ITEM_CHANGED(Slot)
-	if TradeLog[#TradeLog] then
-		Addon:UpdateTradeItemInfo("target", Slot, TradeLog[#TradeLog].ReceiveItems)
+	if Current then
+		Addon:UpdateTradeItemInfo("target", Slot, Current.ReceiveItems)
 	end
 end
 -- 交易金钱信息更新
 function Frame:TRADE_MONEY_CHANGED()
-	if TradeLog[#TradeLog] then
-		Addon:UpdateTradeMoney()
+	if Current then
+		Addon:UpdateTradeMoney(Current)
 	end
 end
 -- 交易接受时更新所有数据
 function Frame:TRADE_ACCEPT_UPDATE()
-	if TradeLog[#TradeLog] then
+	if Current then
 		for i = 1, 7 do
-			Addon:UpdateTradeItemInfo("player", i, TradeLog[#TradeLog].GiveItems)
-			Addon:UpdateTradeItemInfo("target", i, TradeLog[#TradeLog].ReceiveItems)
+			Addon:UpdateTradeItemInfo("player", i, Current.GiveItems)
+			Addon:UpdateTradeItemInfo("target", i, Current.ReceiveItems)
 		end
-		Addon:UpdateTradeMoney()
+		Addon:UpdateTradeMoney(Current)
 	end
 end
 
@@ -556,8 +590,8 @@ do -- Hook SendMail，获取Recipient
 		if Config.LogDays == 0 then
 			return
 		end
-		if TempMail and not TempMail.TargetName then
-			TempMail.TargetName = Recipient
+		if Current and not Current.TargetName then
+			Current.TargetName = Recipient
 		end
 	end
 	hooksecurefunc("SendMail", GetRecipient)
@@ -567,12 +601,23 @@ do -- Hook TakeIndexItem，获取邮件取出的邮件及物品信息
 		if Config.LogDays == 0 then
 			return
 		end
-		local _, _, Sender, _, Money, CODAmount = GetInboxHeaderInfo(MailIndex)
+		local _, _, Sender, _, _, CODAmount = GetInboxHeaderInfo(MailIndex)
 		local ItemName, _, _, Quantity = GetInboxItem(MailIndex, ItemIndex)
 		local ItemLink = GetInboxItemLink(MailIndex, ItemIndex)
-		if not TradeLog[#TradeLog] or TradeLog[#TradeLog].Result ~= "received" or (TradeLog[#TradeLog].TargetName and TradeLog[#TradeLog].TargetName ~= Sender) or Addon:CompareTime(TradeLog[#TradeLog].Time, 10) then
-			local NewMail = Addon:NewMail()
-			t_insert(TradeLog, NewMail)
+
+		if not TradeLog[#TradeLog] or TradeLog[#TradeLog].Result ~= "received" or (TradeLog[#TradeLog].TargetName and TradeLog[#TradeLog].TargetName ~= Sender) or Addon:CompareTime(TradeLog[#TradeLog].Time, 5) then
+			if #TradeLog > 0 and TradeLog[#TradeLog] and TradeLog[#TradeLog].Result == "received" and #TradeLog[#TradeLog].ReceiveItems >= 2 then
+				for i = #TradeLog[#TradeLog].ReceiveItems, 2, -1 do
+					for j = 1, i-1 do
+						if TradeLog[#TradeLog].ReceiveItems[i] and TradeLog[#TradeLog].ReceiveItems[j] and TradeLog[#TradeLog].ReceiveItems[i].Name == TradeLog[#TradeLog].ReceiveItems[j].Name and TradeLog[#TradeLog].ReceiveItems[i].ItemLink == TradeLog[#TradeLog].ReceiveItems[j].ItemLink then
+							TradeLog[#TradeLog].ReceiveItems[j].Number = TradeLog[#TradeLog].ReceiveItems[i].Number + TradeLog[#TradeLog].ReceiveItems[j].Number
+							TradeLog[#TradeLog].ReceiveItems[i] = nil
+							break
+						end
+					end
+				end
+			end
+			t_insert(TradeLog, Addon:NewMail())
 		end
 		if not TradeLog[#TradeLog].TargetName or not TradeLog[#TradeLog].Result then
 			TradeLog[#TradeLog]["TargetName"] = Sender
@@ -580,14 +625,15 @@ do -- Hook TakeIndexItem，获取邮件取出的邮件及物品信息
 			TradeLog[#TradeLog]["Result"] = "received"
 			TradeLog[#TradeLog]["Location"] = GetRealZoneText()
 		end
-		local TempItem = {
-			["Name"] = ItemName,
-			["Number"] = Quantity,
-			["Enchantment"] = nil,
-			["ItemLink"] = ItemLink,
-		}
-		t_insert(TradeLog[#TradeLog].ReceiveItems, TempItem)
-		TradeLog[#TradeLog]["ReceiveMoney"] = TradeLog[#TradeLog]["ReceiveMoney"] + Money
+		do
+			local TempItem = {
+				["Name"] = ItemName,
+				["Number"] = Quantity,
+				["Enchantment"] = nil,
+				["ItemLink"] = ItemLink,
+			}
+			t_insert(TradeLog[#TradeLog].ReceiveItems, TempItem)
+		end
 		TradeLog[#TradeLog]["GiveMoney"] = TradeLog[#TradeLog]["GiveMoney"] + CODAmount
 		TradeLog[#TradeLog]["Date"] = date("%Y-%m-%d")
 		TradeLog[#TradeLog]["Time"] = date("%H:%M:%S")
@@ -600,9 +646,8 @@ do -- Hook TakeIndexMoney，获取邮件取出的金钱信息
 			return
 		end
 		local _, _, Sender, _, Money = GetInboxHeaderInfo(MailIndex)
-		if not TradeLog[#TradeLog] or TradeLog[#TradeLog].Result ~= "received" or (TradeLog[#TradeLog].TargetName and TradeLog[#TradeLog].TargetName ~= Sender) or Addon:CompareTime(TradeLog[#TradeLog].Time, 10) then
-			local NewMail = Addon:NewMail()
-			t_insert(TradeLog, NewMail)
+		if not TradeLog[#TradeLog] or TradeLog[#TradeLog].Result ~= "received" or (TradeLog[#TradeLog].TargetName and TradeLog[#TradeLog].TargetName ~= Sender) or Addon:CompareTime(TradeLog[#TradeLog].Time, 5) then
+			t_insert(TradeLog, Addon:NewMail())
 		end
 		if not TradeLog[#TradeLog].TargetName or not TradeLog[#TradeLog].Result then
 			TradeLog[#TradeLog]["TargetName"] = Sender
@@ -619,99 +664,136 @@ end
 
 -- 打开邮箱界面
 function Frame:MAIL_SHOW()
-	-- SetCVar("blockTrades", 1)
-	local NewMail = Addon:NewMail()
-	TempMail = NewMail
+	Current = Addon:NewMail()
+	MailBoxOpened = true
 end
 -- 记录收件人及邮件附件信息
 function Frame:MAIL_SEND_INFO_UPDATE()
 	if Config.LogDays == 0 then
 		return
 	end
-	-- 如果TempMail为空则需要先创建一个NewMail解构
-	if not TempMail then
-		local NewMal = Addon:NewMail()
-		TempMail = NewMal
+	-- 如果CurrentMail为空则需要先创建一个NewMail結構
+	if not Current then
+		Current = Addon:NewMail()
 	end
 	for i = 1, 12 do
 		local ItemName, _, _, Quantity = GetSendMailItem(i)
 		if ItemName then
-			TempMail.GiveItems[i] = {
+			Current.GiveItems[i] = {
 				["Name"] = ItemName,
 				["Number"] = Quantity,
 				["Enchantment"] = nil,
 				["ItemLink"] = GetSendMailItemLink(i),
 			}
 		else
-			TempMail.GiveItems[i] = nil
+			Current.GiveItems[i] = nil
+		end
+	end
+	for i = 12, 2, -1 do
+		for j = 1, i-1 do
+			if Current.GiveItems[i] and Current.GiveItems[j] and Current.GiveItems[i].Name == Current.GiveItems[j].Name and Current.GiveItems[i].ItemLink == Current.GiveItems[j].ItemLink then
+				Current.GiveItems[j].Number = Current.GiveItems[i].Number + Current.GiveItems[j].Number
+				Current.GiveItems[i] = nil
+				break
+			end
 		end
 	end
 end
 -- 关闭邮箱界面
 function Frame:MAIL_CLOSED()
-	-- SetCVar("blockTrades", 0)
-	TempMail = nil
+	Current = nil
+	MailBoxOpened = false
+	if #TradeLog > 0 and TradeLog[#TradeLog] and TradeLog[#TradeLog].Result == "received" and #TradeLog[#TradeLog].ReceiveItems >= 2 then
+		for i = #TradeLog[#TradeLog].ReceiveItems, 2, -1 do
+			for j = 1, i-1 do
+				if TradeLog[#TradeLog].ReceiveItems[i] and TradeLog[#TradeLog].ReceiveItems[j] and TradeLog[#TradeLog].ReceiveItems[i].Name == TradeLog[#TradeLog].ReceiveItems[j].Name and TradeLog[#TradeLog].ReceiveItems[i].ItemLink == TradeLog[#TradeLog].ReceiveItems[j].ItemLink then
+					TradeLog[#TradeLog].ReceiveItems[j].Number = TradeLog[#TradeLog].ReceiveItems[i].Number + TradeLog[#TradeLog].ReceiveItems[j].Number
+					TradeLog[#TradeLog].ReceiveItems[i] = nil
+					break
+				end
+			end
+		end
+	end
 end
 -- 交易失败通报
 function Frame:UI_ERROR_MESSAGE(...)
 	local arg = {...}
-	if arg[2] == ERR_TRADE_BAG_FULL or arg[2] == ERR_TRADE_MAX_COUNT_EXCEEDED or arg[2] == ERR_TRADE_TARGET_BAG_FULL or arg[2] == ERR_TRADE_TARGET_MAX_COUNT_EXCEEDED or arg[2] == ERR_TRADE_TARGET_DEAD or arg[2] == ERR_TRADE_TOO_FAR then
-		TradeLog[#TradeLog].Result = "error"
-		TradeLog[#TradeLog].Reason = arg[2]
-		if Config.LogTrades then
-			Addon:AnnounceTrade()
+	if Current then
+		if arg[2] == ERR_TRADE_BAG_FULL or arg[2] == ERR_TRADE_MAX_COUNT_EXCEEDED or arg[2] == ERR_TRADE_TARGET_BAG_FULL or arg[2] == ERR_TRADE_TARGET_MAX_COUNT_EXCEEDED or arg[2] == ERR_TRADE_TARGET_DEAD or arg[2] == ERR_TRADE_TOO_FAR then
+			Current.Result = "error"
+			Current.Reason = arg[2]
+			if Config.LogTrades then
+				Addon:AnnounceTrade()
+			end
+		elseif arg[2] == ERR_MAIL_TARGET_NOT_FOUND and MailBoxOpened then
+			Current.TargetName = nil
+		elseif (arg[2] == ERR_ITEM_MAX_COUNT or arg[2] == ERR_INV_FULL) and MailBoxOpened then
+			t_remove(TradeLog[#TradeLog].ReceiveItems, #TradeLog[#TradeLog].ReceiveItems)
 		end
-		t_remove(TradeLog, #TradeLog)
-	elseif arg[2] == ERR_ITEM_MAX_COUNT then
-		if TradeLog[#TradeLog] and TradeLog[#TradeLog].Result == "received" then
-			t_remove(TradeLog, #TradeLog)
-		end
-	elseif arg[2] == ERR_MAIL_TARGET_NOT_FOUND then
-		TradeLog[#TradeLog].TargetName = nil
-	elseif arg[2] == ERR_INV_FULL then
-		t_remove(TradeLog[#TradeLog].ReceiveItems, #TradeLog[#TradeLog].ReceiveItems)
 	end
 end
 -- 交易/邮件通报和记录
 function Frame:UI_INFO_MESSAGE(...)
 	local arg = {...}
+	if not Current then
+		return
+	end
 	if arg[2] == ERR_TRADE_CANCELLED then
-		TradeLog[#TradeLog].Result = "cancelled"
-		TradeLog[#TradeLog].Reason = arg[2]
-		Addon:AnnounceTrade()
-		t_remove(TradeLog, #TradeLog)
+		Current.Result = "cancelled"
+		Current.Reason = arg[2]
+		if Config.LogTrades then
+			Addon:AnnounceTrade()
+		end
+		Current = nil
 	elseif arg[2] == ERR_TRADE_COMPLETE then
-		TradeLog[#TradeLog].Result = "completed"
-		if TradeLog[#TradeLog].GiveItems[7] and TradeLog[#TradeLog].GiveItems[7].Name and not TradeLog[#TradeLog].GiveItems[7].Enchantment then
-			TradeLog[#TradeLog].GiveItems[7] = nil
+		do -- 战场和竞技场不记录
+			local InstanceType = select(2, IsInInstance())
+			if InstanceType == "pvp" or InstanceType == "arena" then
+				return
+			end
 		end
-		if TradeLog[#TradeLog].ReceiveItems[7] and TradeLog[#TradeLog].ReceiveItems[7].Name and not TradeLog[#TradeLog].ReceiveItems[7].Enchantment then
-			TradeLog[#TradeLog].ReceiveItems[7] = nil
+		Current.Result = "completed"
+		if Current.GiveItems[7] and Current.GiveItems[7].Name and not Current.GiveItems[7].Enchantment then
+			Current.GiveItems[7] = nil
 		end
-		if TradeLog[#TradeLog].GiveMoney == 0 and TradeLog[#TradeLog].ReceiveMoney == 0 and not (next(TradeLog[#TradeLog].GiveItems)) and not (next(TradeLog[#TradeLog].ReceiveItems)) then
-			t_remove(TradeLog, #TradeLog)
+		if Current.ReceiveItems[7] and Current.ReceiveItems[7].Name and not Current.ReceiveItems[7].Enchantment then
+			Current.ReceiveItems[7] = nil
+		end
+		if Current.GiveMoney == 0 and Current.ReceiveMoney == 0 and not (next(Current.GiveItems)) and not (next(Current.ReceiveItems)) then
+			return
 		elseif Config.LogDays == 0 then
 			Addon:AnnounceTrade()
-			t_remove(TradeLog, #TradeLog)
 		else
 			Addon:AnnounceTrade()
+			t_insert(TradeLog, Current)
 		end
+		Current = nil
 	elseif arg[2] == ERR_MAIL_SENT then
 		if Config.LogDays == 0 then
 			return
 		end
 		local Money = GetSendMailMoney()
 		if Money > 0 then
-			TempMail["GiveMoney"] = Money
+			Current["GiveMoney"] = Money
 		end
-		if TempMail.GiveMoney > 0 or #TempMail.GiveItems > 0 then
-			TempMail["Result"] = "sent"
-			TempMail["Date"] = date("%Y-%m-%d")
-			TempMail["Time"] = date("%H:%M:%S")
-			TempMail["Location"] = GetRealZoneText()
-			t_insert(TradeLog, TempMail)
-			local NewMail = Addon:NewMail()
-			TempMail = NewMail
+		if Current.GiveMoney > 0 or (next(Current.GiveItems)) then
+			if #TradeLog > 0 and TradeLog[#TradeLog] and TradeLog[#TradeLog].Result == "received" and #TradeLog[#TradeLog].ReceiveItems >= 2 then
+				for i = #TradeLog[#TradeLog].ReceiveItems, 2, -1 do
+					for j = 1, i-1 do
+						if TradeLog[#TradeLog].ReceiveItems[i] and TradeLog[#TradeLog].ReceiveItems[j] and TradeLog[#TradeLog].ReceiveItems[i].Name == TradeLog[#TradeLog].ReceiveItems[j].Name and TradeLog[#TradeLog].ReceiveItems[i].ItemLink == TradeLog[#TradeLog].ReceiveItems[j].ItemLink then
+							TradeLog[#TradeLog].ReceiveItems[j].Number = TradeLog[#TradeLog].ReceiveItems[i].Number + TradeLog[#TradeLog].ReceiveItems[j].Number
+							TradeLog[#TradeLog].ReceiveItems[i] = nil
+							break
+						end
+					end
+				end
+			end
+			Current["Result"] = "sent"
+			Current["Date"] = date("%Y-%m-%d")
+			Current["Time"] = date("%H:%M:%S")
+			Current["Location"] = GetRealZoneText()
+			t_insert(TradeLog, Current)
+			Current = Addon:NewMail()
 		end
 	end
 end
