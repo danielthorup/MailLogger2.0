@@ -1,4 +1,4 @@
-# MailLogger：#
+# MailLogger：
 
 1.0.0 Test Version <br />
 1.0.1 Clear information and close window simultaneously <br />
